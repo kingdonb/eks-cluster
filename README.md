@@ -6,7 +6,27 @@ Create the cluster with `eksctl`
 eksctl create cluster --config-file=cluster.config
 ```
 
+## CDCon + GitOpsCon and Open Source Summit NA
+
+If you are attending one of the talks, you may skip to the [Roadmap of Talks][]
+to find out about some other talks from the author of this guide and friends.
+
+I've collected some details about the environment that runs these demos,
+and I'm inviting team members to share this infrastructure in the interest of
+[Sustainable Computing][]!
+
 ## Addons and Authentication
+
+
+If you are on my team at Weaveworks and you just want access, already know
+about `gsts`, have your AWS account in order, don't need to create another
+cluster, want to poke something in this demo env I made, run this command:
+
+```
+aws eks --region ca-central-1 update-kubeconfig --name multiarch-ossna23
+```
+
+Else, you'll need to take care of some stuff, details of which are below...
 
 Set your account ID in an environment variable:
 
@@ -17,8 +37,11 @@ export AWS_ROLE_DX=arn:aws:iam::${AWS_ACCOUNT_ID}:role/AdministratorAccess
 ```
 
 This isn't my real `ACCOUNT_ID`. I'm in the DX group at Weaveworks, that gets
-me administrator access to our AWS account. I also needed [gsts][], for my
+me administrator access to our AWS sub-account. I also needed [gsts][], for my
 organization's Google-based IdP that identifies me here.
+
+Google IdP setup is not covered here, as it was already done by corporate AWS
+admins (Weaveworks IT department) and I'm very thankful they took care of that.
 
 ```
 gsts --aws-role-arn "$AWS_ROLE_DX" --aws-region=ca-central-1 --idp-id=$GOOGLE_IDP_ID --sp-id=$GOOGLE_SP_ID
@@ -191,6 +214,8 @@ Why all the hype? Does the sauce actually taste as good as it's made to sound?
 Can we actually use Web Assembly to build a Kubernetes operator, or any useful
 microservices? And where are we most likely to get stuck, if we cannot today?
 
+[Roadmap of Talks]: https://github.com/kingdonb/eks-cluster#roadmap-of-cdconoss-summit-na-demos
+[Sustainable Computing]: https://sustainable-computing.io/
 [gsts]: https://github.com/ruimarinho/gsts
 [Not invented here]: https://en.wikipedia.org/wiki/Not_invented_here
 [EBS Docs]: https://docs.aws.amazon.com/eks/latest/userguide/managing-ebs-csi.html
