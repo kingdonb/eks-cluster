@@ -409,6 +409,97 @@ There's further discussion of specific innovative solutions to the runtime
 environment problem in the [CDCon GitOpsCon and OSSNA][] [Roadmap of Talks][].
 We hope you enjoyed the session!
 
+### Bonus: Cluster-API and VCluster
+
+We've got some VCluster definitions that are for CAPI. We need CAPI installed
+in order to take advantage of them. We may use these VClusters as a clean slate
+from which we can inherit some of the infrastructure that we just provisioned.
+
+```
+$ clusterctl init --infrastructure vcluster
+Fetching providers
+Skipping installing cert-manager as it is already installed
+Installing Provider="cluster-api" Version="v1.4.2" TargetNamespace="capi-system"
+Installing Provider="bootstrap-kubeadm" Version="v1.4.2" TargetNamespace="capi-kubeadm-bootstrap-system"
+Installing Provider="control-plane-kubeadm" Version="v1.4.2" TargetNamespace="capi-kubeadm-control-plane-system"
+Installing Provider="infrastructure-vcluster" Version="v0.1.3" TargetNamespace="cluster-api-provider-vcluster-system"
+
+Your management cluster has been initialized successfully!
+
+You can now create your first workload cluster by running the following:
+
+  clusterctl generate cluster [name] --kubernetes-version [version] | kubectl apply -f -
+
+$ cd ~/vcluster-moo-cluster
+```
+
+It takes two or three minutes for Cluster-API to spin up its providers, then we
+can use declarative definition to create two more virtual demo clusters on AWS.
+
+[This repo][kingdonb/vcluster-moo-cluster] contains the Cluster-API definitions
+and some Load Balancers, they are not managed by GitOps as they are cattle and
+can be killed off at any time.
+
+```
+k create -f vclusters/vcluster-demo-cluster.yaml; k create -f vclusters/vcluster-demo-cluster-2.yaml
+namespace/vcluster-demo-cluster-00001 created
+cluster.cluster.x-k8s.io/demo-cluster created
+vcluster.infrastructure.cluster.x-k8s.io/demo-cluster created
+namespace/vcluster-demo-cluster-00002 created
+cluster.cluster.x-k8s.io/demo-cluster-2 created
+vcluster.infrastructure.cluster.x-k8s.io/demo-cluster-2 created
+```
+
+They will also need load balancers, and the load balancers need DNS:
+
+```
+$ k create -f load-balancers/vcluster-demo-cluster-00001-load-balancer.yaml; k create -f load-balancers/vcluster-demo-cluster-00002-load-balancer.yaml
+service/vcluster-loadbalancer created
+service/vcluster-loadbalancer created
+
+$ kg svc|grep LoadBalancer
+ingress-nginx                          ingress-public-ingress-nginx-controller                           LoadBalancer   10.100.129.133   a3faf329a89444425a990f87c430ea46-545149846.ca-central-1.elb.amazonaws.com    80:30597/TCP,443:32636/TCP     135m
+vcluster-demo-cluster-00001            vcluster-loadbalancer                                             LoadBalancer   10.100.120.93    a960c27386d2341dd9b2e2ecfa8a6105-545386275.ca-central-1.elb.amazonaws.com    443:30587/TCP                  18s
+vcluster-demo-cluster-00002            vcluster-loadbalancer                                             LoadBalancer   10.100.175.26    a94d076e89489453ba71bb7c1c0ecb2e-1561788663.ca-central-1.elb.amazonaws.com   443:30461/TCP                  16s
+```
+
+Create the DNS records in DigitalOcean by hand:
+
+* `demo-cluster.hephy.pro`
+* `demo-cluster-2.hephy.pro`
+
+Give the changes a few seconds to propagate, then try a connection with the
+`vcluster` cli:
+
+```
+$ for i in demo-cluster demo-cluster-2; do kconf rm $i ;done
+$ vcluster connect demo-cluster -n vcluster-demo-cluster-00001 --server=https://demo-cluster.hephy.pro
+done √ Switched active kube context to vcluster_demo-cluster_vcluster-demo-cluster-00001_multiarch-ossna23
+- Use `vcluster disconnect` to return to your previous kube context
+- Use `kubectl get namespaces` to access the vcluster
+
+$ kg po
+NAMESPACE     NAME                       READY   STATUS    RESTARTS   AGE
+kube-system   coredns-6f8f9bbf68-k2mh4   1/1     Running   0          2m44s
+
+$ kubectx multiarch-ossna23
+$ vcluster connect demo-cluster-2 -n vcluster-demo-cluster-00002 --server=https://demo-cluster-2.hephy.pro
+$ kconf rename vcluster_demo-cluster_vcluster-demo-cluster-00001_multiarch-ossna23 demo-cluster
+$ kconf rename vcluster_demo-cluster-2_vcluster-demo-cluster-00002_multiarch-ossna23 demo-cluster-2
+
+$ kubectx demo-cluster-2
+✔ Switched to context "demo-cluster-2".
+$ kg po
+NAMESPACE     NAME                       READY   STATUS    RESTARTS   AGE
+kube-system   coredns-6f8f9bbf68-992k2   1/1     Running   0          6m33s
+```
+
+Now we are really ready to do some damage! Demo clusters that we can provision
+and connect to a load balancer of our own design, in just a few easy seconds.
+
+Really hope you have enjoyed this, please visit [Flux at GitOpsCon/OSS 2023][]
+or return to the [CDCon GitOpsCon and OSSNA][] page, and [Roadmap of Talks][]!
+
 [CDCon GitOpsCon and OSSNA]: https://github.com/kingdonb/eks-cluster#cdcon--gitopscon-and-open-source-summit-na
 [Cluster Restore Guide]: https://github.com/kingdonb/eks-cluster#addons-and-authentication
 [Flux Bootstrap]: https://github.com/kingdonb/eks-cluster#flux-bootstrap
@@ -418,3 +509,5 @@ We hope you enjoyed the session!
 [Flux Example Apps - DNS]: https://github.com/kingdonb/eks-cluster/blob/main/CHEATSHEET.md#flux-example-apps---dns
 [kedacore/http-add-on#665]: https://github.com/kedacore/http-add-on/issues/665
 [Roadmap of Talks]: https://github.com/kingdonb/eks-cluster#roadmap-of-cdconoss-summit-na-demos
+[kingdonb/vcluster-moo-cluster]: https://github.com/kingdonb/vcluster-moo-cluster
+[Flux at GitOpsCon/OSS 2023]: https://bit.ly/gitopscon2023
