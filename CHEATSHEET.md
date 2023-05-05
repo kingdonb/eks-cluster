@@ -209,7 +209,153 @@ name. It's easy to bypass this rate limit if you have experienced this before.
 
 In case of brief temporary failures, delete the certificate and try again!
 
+#### EKSctl: Persistent Disks for Prometheus
+
+We've come to the [ebs-csi][] configuration, which has a few prerequisites.
+
+```
+export AWS_ACCOUNT_ID=4574....
+eksctl utils associate-iam-oidc-provider --region=ca-central-1 --cluster=multiarch-ossna23 --approve
+eksctl create iamserviceaccount   --name ebs-csi-controller-sa   --namespace kube-system   --cluster multiarch-ossna23   --attach-policy-arn arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy   --approve   --role-only   --role-name AmazonEKS_EBS_CSI_DriverRole
+eksctl create addon --name aws-ebs-csi-driver --cluster multiarch-ossna23 --service-account-role-arn arn:aws:iam::${AWS_ACCOUNT_ID}:role/AmazonEKS_EBS_CSI_DriverRole --force
+```
+
+The `AWS_ACCOUNT_ID` is from the Notion doc "Accessing AWS Resources" that you
+may have received in your onboarding materials; it is department-specific as we
+each have our own separate roles in the company granting administrator access.
+
+(The OIDC provider should already exist in the region, hopefully!)
+
+It's `AWS_ROLE_CX` or something like `AWS_ROLE_SANDBOX`, the account ID is just
+the numbers from in between the bookends: `arn:aws:iam::{{right here}}:role`.
+It should take only about `30s` to provision the addon. The good news should
+come in about 3-5 minutes, that Prometheus has a persistent disk attached and
+it can begin collecting data:
+
+```
+$ k describe pvc -n monitoring prometheus-kube-prometheus-stack-prometheus-db-prometheus-kube-prometheus-stack-prometheus-0
+...
+  Normal   ExternalProvisioning  2m47s (x283 over 72m)  persistentvolume-controller  waiting for a volume to be created, either by external provisioner "ebs.csi.aws.com" or manually created by system administrator
+  Warning  ProvisioningFailed    70s                   ebs.csi.aws.com_ebs-csi-controller-7949bff697-l2bgb_de8f3ab6-3025-4d5e-8220-6adc43a53870  (combined from similar events): failed to provision volume with StorageClass "gp2": rpc error: code = Internal desc = Could not create volume "pvc-d8e7bc4a-e86a-47ae-ad5b-63cc8918c948": could not create volume in EC2: UnauthorizedOperation: You are not authorized to perform this operation. Encoded authorization failure message: G2B5CCkIzzBQ5qig6MlsMFhpqR8-Kf9yTAZVLglY4TolhFjWDb3p6R-J9vWcWp7dNz8YRThnzOEDa0n7aEIq0f8_sE899dSKFmp4nHs5rEJGChNN6hEGNjJ-_g4UF9SNr5vCgI0PoeG34t8dAHjwU0EB8b6eFzKZhZ5yaNeAaibBrqQ4bhuRjZ_9VDYM-nna3-SiXPI7dr_wSuf9ktoGcK-bz2gzqZFOuEUeNQpT-G44gdyA6kt_TQwZ9f7TqIcv-rmLeLSJU5EYtWfL-kHIIMpvVetwwAULvKBa9KUchAUI8I8p6hYkIu4fttSRS2PwT4i88yjTiJNzb8QRh5OkAwG_INM3z-EKOIMNCApt3-qUbvAvos3dol-T6756IQxd01NIqdSHI5VX_Wl2BapgjG_W2cHUKu6_DWM0_KEmW_Snwn6dnWjRqkPyGFHmxCJpyG_oAjCMD6jBfKMknTWVueldV1lXXBtlN9UKZ20bMcA_HzgvXCJ7SCAwollKQBfwSOWNZnZ84xjMcZJkF5wNC62VperlawYiUxiHKH1FEIoxW6VPGTrSwiQBdxWK4CDLdmGSKNFcw6kO97egnbOKyoZHFpmsupAJdtQwKyeltwIQsLBnBCbOpIolbMU7rTzbbdkbNmjUSu941gqgRWfAq3sfx9kPKdExBw
+
+$ ks rollout restart deploy/ebs-csi-controller deploy/ebs-csi-node
+deployment.apps/ebs-csi-controller restarted
+$ ks rollout restart ds/ebs-csi-node
+daemonset.apps/ebs-csi-node restarted
+```
+
+If you get these errors, time to delete the addon and try again:
+
+```
+eksctl delete addon --name aws-ebs-csi-driver --cluster multiarch-ossna23
+eksctl create addon --name aws-ebs-csi-driver --cluster multiarch-ossna23 --service-account-role-arn arn:aws:iam::${AWS_ACCOUNT_ID}:role/AmazonEKS_EBS_CSI_DriverRole --force
+```
+
+The addon may have been created after the service account. Now it works:
+
+```
+...
+  Normal   ProvisioningSucceeded  76s  ebs.csi.aws.com_ebs-csi-controller-7949bff697-gcvzj_99911d21-c761-40e4-b271-a214ba2346c1  Successfully provisioned volume pvc-d8e7bc4a-e86a-47ae-ad5b-63cc8918c948
+
+$ kg pv
+NAME                                       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM                                                                                                     STORAGECLASS   REASON   AGE
+pvc-d8e7bc4a-e86a-47ae-ad5b-63cc8918c948   50Gi       RWO            Delete           Bound    monitoring/prometheus-kube-prometheus-stack-prometheus-db-prometheus-kube-prometheus-stack-prometheus-0   gp2                     2m32s
+
+$ k -n monitoring get po
+NAME                                                       READY   STATUS    RESTARTS      AGE
+alertmanager-kube-prometheus-stack-alertmanager-0          2/2     Running   1 (80m ago)   80m
+flagger-59b8594797-94vch                                   1/1     Running   0             81m
+kube-prometheus-stack-grafana-77966dd8bd-j97f5             3/3     Running   0             80m
+kube-prometheus-stack-kube-state-metrics-cb48bd494-xfljk   1/1     Running   0             80m
+kube-prometheus-stack-operator-758b68bd5f-vrkd9            1/1     Running   0             80m
+kube-prometheus-stack-prometheus-node-exporter-46phl       1/1     Running   0             80m
+kube-prometheus-stack-prometheus-node-exporter-l9fhw       1/1     Running   0             80m
+loki-stack-0                                               1/1     Running   0             80m
+loki-stack-promtail-8ggqv                                  1/1     Running   0             80m
+loki-stack-promtail-gmnw5                                  1/1     Running   0             80m
+prometheus-kube-prometheus-stack-prometheus-0              2/2     Running   0             80m
+```
+
+Now we should have basically everything we need for simple Flagger demos.
+But...
+
+We've one more AWS thing to take care of before we can get on with big demos:
+
+#### EKSctl: Autoscaling Managed Node Groups
+
+Our cluster autoscaler is in crashloop:
+
+```
+$ ks get po
+...
+cluster-autoscaler-7b8db694f6-c6dvq   0/1     CrashLoopBackOff   21 (26s ago)   84m
+```
+
+We need to do similar role binding magic as all that we've just done for EBS
+persistent disks. There are a few minutes until Prometheus detects the error
+condition and starts alerting about it in the [#ossna23-demo slack channel](https://empfin.slack.com/archives/C0563R1D1H8).
+
+We also need to suspend Flux because Flux is managing the annotation, and we're
+about to create a new role that doesn't match the one in Git. We'll update it.
+
+```
+$ flux suspend ks flux-system
+# If you already created out of order, delete the iam service account:
+## $ eksctl delete iamserviceaccount --cluster=multiarch-ossna23 --namespace=kube-system --name=cluster-autoscaler
+# Then create it again
+
+$ eksctl create iamserviceaccount   --cluster=multiarch-ossna23   --namespace=kube-system   --name=cluster-autoscaler   --attach-policy-arn=arn:aws:iam::${AWS_ACCOUNT_ID}:policy/AmazonEKSClusterAutoscalerPolicy   --override-existing-serviceaccounts   --approve
+$ ks rollout restart deploy/cluster-autoscaler
+deployment.apps/cluster-autoscaler restarted
+$ ks get po -w
+NAME                                  READY   STATUS    RESTARTS   AGE
+...
+cluster-autoscaler-7b8db694f6-hsqsl   1/1     Running   0          7s
+$ ks edit sa cluster-autoscaler
+...
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::457472006214:role/eksctl-multiarch-ossna23-addon-iamserviceacc-Role1-GK446CZHH6HE
+```
+
+In about 35 seconds this `eksctl` command completes, and we can see the cluster
+autoscaler pod running uninterrupted on the next successful restart.
+
+Harvest the newly created role annotation and use it to replace ours in Git:
+
+```
+$ cd ~/w/fleet-infra/clusters/multiarch-ossna
+$ vi infra/autoscaler/cluster-autoscaler-autodiscover.yaml
+# (update the annotation value)
+$ git commit ...
+$ git push
+```
+
+When the gitrepo is updated, safe to resume `flux-system` without interrupting
+the autoscaler that we have just configured:
+
+```
+$ kg gitrepo
+NAMESPACE     NAME          URL                                           AGE    READY   STATUS
+flux-system   flux-system   ssh://git@github.com/kingdon-ci/fleet-infra   101m   True    stored artifact for revision 'main@sha1:d3ef057dcbbf10037b3104ae7cec2984f3aa49fd'
+
+# (note that the revision is the one we just pushed)
+
+$ flux resume ks flux-system
+```
+
+## Conclusion
+
+Congratulations! You've reached the end of the cheat-sheet.
+
+Undoubtedly you have some work that will exercise the cluster autoscaler. Go
+forth and schedule workloads, and autoscale your nodegroups in good health!
+
 [CDCon GitOpsCon and OSSNA]: https://github.com/kingdonb/eks-cluster#cdcon--gitopscon-and-open-source-summit-na
 [Cluster Restore Guide]: https://github.com/kingdonb/eks-cluster#addons-and-authentication
 [Flux Bootstrap]: https://github.com/kingdonb/eks-cluster#flux-bootstrap
 [Flux monitoring]: https://fluxcd.io/flux/guides/monitoring/
+[ebs-csi]: https://github.com/kingdonb/eks-cluster#ebs-csi
