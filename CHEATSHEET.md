@@ -505,7 +505,7 @@ or return to the [CDCon GitOpsCon and OSSNA][] page, and [Roadmap of Talks][]!
 [Flux Bootstrap]: https://github.com/kingdonb/eks-cluster#flux-bootstrap
 [Flux monitoring]: https://fluxcd.io/flux/guides/monitoring/
 [ebs-csi]: https://github.com/kingdonb/eks-cluster#ebs-csi
-[xkcd.hephy.pro]: https://xkcd.hephy.pro
+[xkcd.hephy.pro]: http://xkcd.hephy.pro
 [Flux Example Apps - DNS]: https://github.com/kingdonb/eks-cluster/blob/main/CHEATSHEET.md#flux-example-apps---dns
 [kedacore/http-add-on#665]: https://github.com/kedacore/http-add-on/issues/665
 [Roadmap of Talks]: https://github.com/kingdonb/eks-cluster#roadmap-of-cdconoss-summit-na-demos
