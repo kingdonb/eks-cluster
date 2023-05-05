@@ -347,6 +347,29 @@ flux-system   flux-system   ssh://git@github.com/kingdon-ci/fleet-infra   101m  
 $ flux resume ks flux-system
 ```
 
+... and I had to delete and recreate the service account one more time after this.
+I must have got the order wrong. The failing (and then eventual successful) output
+of cluster-autoscaler looks like all this:
+
+```
+E0505 18:09:38.943755       1 aws_manager.go:262] Failed to regenerate ASG cache: WebIdentityErr: failed to retrieve credentials
+caused by: AccessDenied: Not authorized to perform sts:AssumeRoleWithWebIdentity
+	status code: 403, request id: a92dc438-f4b9-42d4-af1b-bea8f99ce16c
+
+...
+
+I0505 18:15:22.234276       1 aws_manager.go:266] Refreshed ASG list, next refresh after 2023-05-05 18:16:22.23427234 +0000 UTC m=+81.277883299
+...
+I0505 18:15:42.258737       1 static_autoscaler.go:492] Calculating unneeded nodes
+I0505 18:15:42.258759       1 pre_filtering_processor.go:66] Skipping ip-192-168-30-102.ca-central-1.compute.internal - node group min size reached
+I0505 18:15:42.258775       1 pre_filtering_processor.go:66] Skipping ip-192-168-82-229.ca-central-1.compute.internal - node group min size reached
+```
+
+When the created role and Git are in sync, the ASG list can be read and the
+nodes in each node group are considered to determine if they are still needed.
+
+(Node groups will not scale below 1 node, but it can be configured if needed.)
+
 ## Conclusion
 
 Congratulations! You've reached the end of the cheat-sheet.
@@ -354,8 +377,44 @@ Congratulations! You've reached the end of the cheat-sheet.
 Undoubtedly you have some work that will exercise the cluster autoscaler. Go
 forth and schedule workloads, and autoscale your nodegroups in good health!
 
+### Bonus: KEDA
+
+We would like to scale pods to zero when they are not needed. KEDA provides an
+HTTP add-on and an example that we can use to test `HTTPScaledObject` behavior.
+
+```
+$ cd ~/w/fleet-infra
+$ cd clusters/multiarch-ossna/keda/http-add-on/
+$ helm install xkcd ./examples/xkcd  -n keda-test
+```
+
+If you visit [xkcd.hephy.pro][] now, you should find that KEDA's XKCD-serv is
+responding... after a few seconds of waiting, in case you hit a cold start!
+
+```
+$ k -n keda-test get ingress
+NAME   CLASS    HOSTS            ADDRESS                                                                     PORTS   AGE
+xkcd   public   xkcd.hephy.pro   a3faf329a89444425a990f87c430ea46-545149846.ca-central-1.elb.amazonaws.com   80      53s
+```
+
+This uses the load balancer we provisioned earlier, way back in the section
+[Flux Example Apps - DNS][]. If you've made it this far, then pat yourself on
+the back, as we've now configured and tested our autoscalers from end-to-end!
+
+If you run into trouble, you may need to build a multi-arch image as your
+XKCD-serv could land on either amd64 or aarch64 environment at runtime.
+See [the issue][kedacore/http-add-on#665] for more information on this.
+
+There's further discussion of specific innovative solutions to the runtime
+environment problem in the [CDCon GitOpsCon and OSSNA][] [Roadmap of Talks][].
+We hope you enjoyed the session!
+
 [CDCon GitOpsCon and OSSNA]: https://github.com/kingdonb/eks-cluster#cdcon--gitopscon-and-open-source-summit-na
 [Cluster Restore Guide]: https://github.com/kingdonb/eks-cluster#addons-and-authentication
 [Flux Bootstrap]: https://github.com/kingdonb/eks-cluster#flux-bootstrap
 [Flux monitoring]: https://fluxcd.io/flux/guides/monitoring/
 [ebs-csi]: https://github.com/kingdonb/eks-cluster#ebs-csi
+[xkcd.hephy.pro]: https://xkcd.hephy.pro
+[Flux Example Apps - DNS]: https://github.com/kingdonb/eks-cluster/blob/main/CHEATSHEET.md#flux-example-apps---dns
+[kedacore/http-add-on#665]: https://github.com/kedacore/http-add-on/issues/665
+[Roadmap of Talks]: https://github.com/kingdonb/eks-cluster#roadmap-of-cdconoss-summit-na-demos
