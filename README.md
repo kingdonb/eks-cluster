@@ -6,6 +6,12 @@ Create the cluster with `eksctl`
 eksctl create cluster --config-file=cluster.config
 ```
 
+## Bootstrap Repo
+
+This EKS cluster config is for bootstrapping into the [kingdonb/fleet-infra][]
+Git repository, and uses Flux to manage everything, save for the cluster create
+that's done by hand with `eksctl`, which we can follow according to these docs.
+
 ## CDCon + GitOpsCon and Open Source Summit NA
 
 If you are attending one of the talks, you may skip to the [Roadmap of Talks][]
@@ -16,7 +22,6 @@ and I'm inviting team members to share this infrastructure in the interest of
 [Sustainable Computing][]!
 
 ## Addons and Authentication
-
 
 If you are on my team at Weaveworks and you just want access, already know
 about `gsts`, have your AWS account in order, don't need to create another
@@ -49,6 +54,15 @@ gsts --aws-role-arn "$AWS_ROLE_DX" --aws-region=us-east-2 --idp-id=$GOOGLE_IDP_I
 
 Hint, in case you don't have a clue / need help locating these values, they are
 in the fine IT/corp docs manuals: [(Notion doc "Accessing AWS Resources")][].
+
+This sample `.aws/config` might help, (substituting your own values for IDP):
+
+```
+[profile sts]
+region = us-east-2
+output = text
+credential_process = gsts --aws-region us-east-2 --idp-id=... --sp-id=...
+```
 
 We're going to use these values in some later commands. If we set up all these
 variables and have our AWS account details in order, we should be able to copy
@@ -223,6 +237,7 @@ Why all the hype? Does the sauce actually taste as good as it's made to sound?
 Can we actually use Web Assembly to build a Kubernetes operator, or any useful
 microservices? And where are we most likely to get stuck, if we cannot today?
 
+[kingdonb/fleet-infra]: https://github.com/kingdon-ci/fleet-infra
 [Roadmap of Talks]: https://github.com/kingdonb/eks-cluster#roadmap-of-cdconoss-summit-na-demos
 [Sustainable Computing]: https://sustainable-computing.io/
 [gsts]: https://github.com/ruimarinho/gsts
