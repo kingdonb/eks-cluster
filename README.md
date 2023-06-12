@@ -23,7 +23,7 @@ about `gsts`, have your AWS account in order, don't need to create another
 cluster, want to poke something in this demo env I made, run this command:
 
 ```
-aws eks --region ca-central-1 update-kubeconfig --name multiarch-ossna23
+aws eks --region us-east-2 update-kubeconfig --name kccnc-chicago
 ```
 
 Else, you'll need to take care of some stuff, details of which are below...
@@ -44,8 +44,11 @@ Google IdP setup is not covered here, as it was already done by corporate AWS
 admins (Weaveworks IT department) and I'm very thankful they took care of that.
 
 ```
-gsts --aws-role-arn "$AWS_ROLE_DX" --aws-region=ca-central-1 --idp-id=$GOOGLE_IDP_ID --sp-id=$GOOGLE_SP_ID
+gsts --aws-role-arn "$AWS_ROLE_DX" --aws-region=us-east-2 --idp-id=$GOOGLE_IDP_ID --sp-id=$GOOGLE_SP_ID
 ```
+
+Hint, in case you don't have a clue / need help locating these values, they are
+in the fine IT/corp docs manuals: [(Notion doc "Accessing AWS Resources")][].
 
 We're going to use these values in some later commands. If we set up all these
 variables and have our AWS account details in order, we should be able to copy
@@ -62,17 +65,21 @@ we'll need access to persistent disks. There's nothing remarkable about this.
 Roughly from [AWS Docs][EBS Docs] and the relevant [IAM Docs][EBS IAM Docs]:
 
 ```
-eksctl create addon --name aws-ebs-csi-driver --cluster multiarch-ossna23 --service-account-role-arn arn:aws:iam::${AWS_ACCOUNT_ID}:role/AmazonEKS_EBS_CSI_DriverRole --force
+eksctl create addon --name aws-ebs-csi-driver --cluster kccnc-chicago --service-account-role-arn arn:aws:iam::${AWS_ACCOUNT_ID}:role/AmazonEKS_EBS_CSI_DriverRole --force
 
-eksctl create iamserviceaccount   --name ebs-csi-controller-sa   --namespace kube-system   --cluster multiarch-ossna23   --attach-policy-arn arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy   --approve   --role-only   --role-name AmazonEKS_EBS_CSI_DriverRole
+eksctl create iamserviceaccount   --name ebs-csi-controller-sa   --namespace kube-system   --cluster kccnc-chicago   --attach-policy-arn arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy   --approve   --role-only   --role-name AmazonEKS_EBS_CSI_DriverRole
 ```
-
-You may need to create an IAM OIDC provider first, for this step and/or the
-next step. (Or your cluster may already have been provisioned with one.)
 
 The AWS policy document `AmazonEBSCSIDriverPolicy` is covered by the IAM guide
 for EBS linked above. This policy permits our CSI driver to attach storage from
 the bundled `gp2` storage class, and to clean up when PV bindings are deleted.
+
+You may need to create an IAM OIDC provider first, for this step and/or the
+next step. (Or your cluster may already have been provisioned with one.)
+
+```
+eksctl utils associate-iam-oidc-provider --region=us-east-2 --cluster=kccnc-chicago --approve
+```
 
 ### autoscaler
 
@@ -84,7 +91,7 @@ off workloads safely on nodes that are scheduled for demolition.
 Nodes in Kubernetes are ephemeral. We've created two EKS managed node groups.
 
 ```
-eksctl create iamserviceaccount   --cluster=multiarch-ossna23   --namespace=kube-system   --name=cluster-autoscaler   --attach-policy-arn=arn:aws:iam::${AWS_ACCOUNT_ID}:policy/AmazonEKSClusterAutoscalerPolicy   --override-existing-serviceaccounts   --approve
+eksctl create iamserviceaccount   --cluster=kccnc-chicago   --namespace=kube-system   --name=cluster-autoscaler   --attach-policy-arn=arn:aws:iam::${AWS_ACCOUNT_ID}:policy/AmazonEKSClusterAutoscalerPolicy   --override-existing-serviceaccounts   --approve
 ```
 
 Covered in more detail in the [EKS Autoscaling][] documentation:
@@ -107,8 +114,10 @@ need OIDC, but for what? (CSI storage and node auto-scaling, that's what.)"
 With all that out of the way, ensure the OIDC provider is associated:
 
 ```
-eksctl utils associate-iam-oidc-provider --region=ca-central-1 --cluster=multiarch-ossna23 --approve
+eksctl utils associate-iam-oidc-provider --region=us-east-2 --cluster=kccnc-chicago --approve
 ```
+
+(This command was already mentioned once before, in the `ebs-csi` section.)
 
 ### Flux Bootstrap
 
@@ -149,7 +158,7 @@ repository. We still have the private key, let's put it where Flux can utilize i
 
 ```
 export KEY_FP=BF333F5B18A7B7E64ABF8ECD3DA73AD3A17399DC
-kubectx multiarch-ossna23
+kubectx kccnc-chicago
 gpg --export-secret-keys --armor "${KEY_FP}" | kubectl create secret generic sops-gpg --namespace=flux-system --from-file=sops.asc=/dev/stdin
 flux reconcile ks my-secrets
 ```
@@ -226,3 +235,6 @@ microservices? And where are we most likely to get stuck, if we cannot today?
 [GitOpsCon Lightning Talk]: https://sched.co/1JpBS
 [ContainerCon Session Talk]: https://sched.co/1K55z
 [OpenGovCon Session Talk]: https://sched.co/1K57U
+
+<!-- # Weaveworks Internal Docs -->
+[(Notion doc "Accessing AWS Resources")]: https://www.notion.so/Accessing-AWS-Resources-600faa584fec4c6ba5b0f2ef27be309e
