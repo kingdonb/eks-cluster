@@ -413,7 +413,7 @@ We hope you enjoyed the session!
 
 We've got some VCluster definitions that are for CAPI. We need CAPI installed
 in order to take advantage of them. We may use these VClusters as a clean slate
-from which we can inherit some of the infrastructure that we just provisioned.
+through which we can inherit some of the infrastructure we just provisioned.
 
 ```
 $ clusterctl init --infrastructure vcluster
