@@ -77,7 +77,7 @@ finish cleaning up after itself.
 
 ```
 2023-05-05 12:01:12 [✖]  creating CloudFormation stack "eksctl-multiarch-ossna23-cluster": operation error CloudFormation: CreateStack, https response error StatusCode: 400, RequestID: 9148a40b-3776-457e-b38a-320dec0a2e52, AlreadyExistsException: Stack [eksctl-multiarch-ossna23-cluster] already exists
-$ eksctl delete cluster --region=ca-central-1 --name=multiarch-ossna23
+$ eksctl delete cluster --region=us-east-2 --name=kccnc-chicago
 Error: unable to describe cluster control plane: operation error EKS: DescribeCluster, https response error StatusCode: 404, RequestID: 033adcca-0276-4793-8dbc-e3109f4704b7, ResourceNotFoundException: No cluster found for name: multiarch-ossna23.
 ```
 
@@ -107,12 +107,12 @@ Let's clean up the terminal by renaming the context with `kconf`, and follow
 the [Flux Bootstrap][] instructions from the bottom of our EKS Cluster guide:
 
 ```
-kconf rename kingdon@weave.works@multiarch-ossna23.ca-central-1.eksctl.io multiarch-ossna23
+kconf rename kingdon@weave.works@kccnc-chicago.us-east-2.eksctl.io kccnc-chicago
 kubectx howard-space
 kubens default
 k get secret my-app-secret -oyaml|yq .data.password|base64 -D|pbcopy && echo "copied GITHUB_TOKEN into clipboard"
 export GITHUB_TOKEN=$(pbpaste)
-kubectx multiarch-ossna23
+kubectx kccnc-chicago
 eksctl enable flux --config-file=cluster.config
 ```
 
@@ -123,7 +123,7 @@ SOPS secrets needed for Prometheus's slack reporter.
 
 ```
 export KEY_FP=BF333F5B18A7B7E64ABF8ECD3DA73AD3A17399DC
-kubectx multiarch-ossna23
+kubectx kccnc-chicago
 gpg --export-secret-keys --armor "${KEY_FP}" | kubectl create secret generic sops-gpg --namespace=flux-system --from-file=sops.asc=/dev/stdin
 flux reconcile ks my-secrets
 ```
@@ -215,7 +215,7 @@ We've come to the [ebs-csi][] configuration, which has a few prerequisites.
 
 ```
 export AWS_ACCOUNT_ID=4574....
-eksctl utils associate-iam-oidc-provider --region=ca-central-1 --cluster=multiarch-ossna23 --approve
+eksctl utils associate-iam-oidc-provider --region=us-east-2 --cluster=kccnc-chicago --approve
 eksctl create iamserviceaccount   --name ebs-csi-controller-sa   --namespace kube-system   --cluster multiarch-ossna23   --attach-policy-arn arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy   --approve   --role-only   --role-name AmazonEKS_EBS_CSI_DriverRole
 eksctl create addon --name aws-ebs-csi-driver --cluster multiarch-ossna23 --service-account-role-arn arn:aws:iam::${AWS_ACCOUNT_ID}:role/AmazonEKS_EBS_CSI_DriverRole --force
 ```
@@ -482,7 +482,7 @@ $ kg po
 NAMESPACE     NAME                       READY   STATUS    RESTARTS   AGE
 kube-system   coredns-6f8f9bbf68-k2mh4   1/1     Running   0          2m44s
 
-$ kubectx multiarch-ossna23
+$ kubectx kccnc-chicago
 $ vcluster connect demo-cluster-2 -n vcluster-demo-cluster-00002 --server=https://demo-cluster-2.hephy.pro
 $ kconf rename vcluster_demo-cluster_vcluster-demo-cluster-00001_multiarch-ossna23 demo-cluster
 $ kconf rename vcluster_demo-cluster-2_vcluster-demo-cluster-00002_multiarch-ossna23 demo-cluster-2
